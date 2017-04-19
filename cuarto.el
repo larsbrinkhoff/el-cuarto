@@ -12,11 +12,15 @@
 ;; - P: program counter.
 ;; - S: data stack pointer; handle by Emacs' bytecode VM.
 ;; - R: return stack pointer.
+;; - W: word pointer.
+;; - T: temporary.
 ;;
 ;; The bytecode function constant vector is laid out like this:
 ;; - Slot 0: bytecode string.
 ;; - Slot 1: P, an integer address.
 ;; - Slot 2: R, a cons.
+;; - Slot 3: W, an integer address.
+;; - Slot 4: T, an integer.
 
 (require 'cl)
 
@@ -48,6 +52,9 @@
 (defmacro get-dictionary ()
   '(byte-constant . 0))
 
+(defmacro byte-nop ()
+  '(byte-discardN . 0))
+
 (defmacro next ()
   '(byte-nop))
 
@@ -61,13 +68,13 @@
   (next))
 
 (defword "c@"
-  (byte-constant . 0)
+  (get-dictionary)
   ;;(byte-swap)
   (byte-aref)
   (next))
 
 (defword "c!"
-  (byte-constant <dictionary>)
+  (get-dictionary)
   ;; ...
   (byte-aset)
   (next))
@@ -76,8 +83,33 @@
   (byte-dup)
   (next))
 
+(defword "2dup"
+  (byte-stack-ref . 1)
+  (byte-stack-ref . 1)
+  (next))
+
+(defword "over"
+  (byte-stack-ref . 1)
+  (next))
+
 (defword "drop"
   (byte-discard)
+  (next))
+
+(defword "2drop"
+  (byte-discardN . 2)
+  (next))
+
+(defword "3drop"
+  (byte-discardN . 3)
+  (next))
+
+(defword "nip"
+  (byte-discardn . #x81)
+  (next))
+
+(defword "swap"
+  (byte-varset . 4)
   (next))
 
 (defword "="
@@ -92,13 +124,60 @@
   (byte-diff)
   (next))
 
+(defword "1+"
+  (byte-add1)
+  (next))
+
+(defword "1-"
+  (byte-sub1)
+  (next))
+
+(defword "negate"
+  (byte-negate)
+  (next))
+
+(defword "*"
+  (byte-mult)
+  (next))
+
+(defword "/"
+  (byte-quo)
+  (next))
+
+(defword "rem"
+  (byte-rem)
+  (next))
+
+(defword "max"
+  (byte-max)
+  (next))
+
+(defword "min"
+  (byte-min)
+  (next))
+
+(defword "branch"
+  (byte-goto . n))
+
+(defword "0branch"
+  (byte-gotoifnil . n))
+
+(defword "(literal)"
+  ...)
+
 (defword "bye"
   (byte-return))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun check ()
-  (disassemble (make-byte-code 0 dictionary (vector dictionary) 256)))
+  (let ((constants (vector dictionary 'P 'R 'W 'T)))
+    (disassemble (make-byte-code 0 dictionary constants 256))))
+
+
+(defun run (code &optional constants)
+  (funcall
+   (make-byte-code 0 (byte-compile-lapcode code) constants 256)))
 
 (let ((lexical-binding t))
   (defun foo (x)
@@ -113,3 +192,9 @@
    (byte-dup)
    (byte-plus)
    (byte-return)))
+
+(run '((byte-constant . 0)
+       (byte-constant . 1)
+       (byte-discardN . 0)  ;nop
+       (byte-return))
+     [1 2])

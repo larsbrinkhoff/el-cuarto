@@ -10,7 +10,7 @@
 ;;
 ;; The Forth registers are 
 ;; - P: program counter.
-;; - S: data stack pointer; handle by Emacs' bytecode VM.
+;; - S: data stack pointer; handled by Emacs' bytecode VM.
 ;; - R: return stack pointer.
 ;; - W: word pointer.
 ;; - T: temporary.
@@ -24,7 +24,7 @@
 
 (require 'cl)
 
-(defvar dictionary (make-string 20 0))
+(defvar dictionary (make-string 1024 0))
 
 (defvar jump-table
   (let ((table (make-hash-table :test 'eq)))
@@ -105,7 +105,7 @@
   (next))
 
 (defword "nip"
-  (byte-discardn . #x81)
+  (byte-discardN . #x81)
   (next))
 
 (defword "swap"
@@ -156,28 +156,29 @@
   (byte-min)
   (next))
 
-(defword "branch"
-  (byte-goto . n))
+;;(defword "branch"
+;;  (byte-goto . 0))
 
-(defword "0branch"
-  (byte-gotoifnil . n))
+;;(defword "0branch"
+;;  (byte-goto-if-nil . 0))
 
-(defword "(literal)"
-  ...)
+;;(defword "(literal)"
+;;  ...)
 
 (defword "bye"
   (byte-return))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun make-function (code constants)
+  (make-byte-code 0 code constants 256))
+
 (defun check ()
   (let ((constants (vector dictionary 'P 'R 'W 'T)))
-    (disassemble (make-byte-code 0 dictionary constants 256))))
-
+    (disassemble (make-function dictionary constants))))
 
 (defun run (code &optional constants)
-  (funcall
-   (make-byte-code 0 (byte-compile-lapcode code) constants 256)))
+  (funcall (make-function (byte-compile-lapcode code) constants)))
 
 (let ((lexical-binding t))
   (defun foo (x)

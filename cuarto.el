@@ -31,8 +31,11 @@
     (dotimes (i 65535 table)
       (setf (gethash i table) i))))
 
+(defvar xt-table (make-hash-table :test 'equal))
+
 (defvar here 0)
 (defvar latest 0)
+(defvar docol 42)
 
 (defun c-comma (c)
   (setf (aref dictionary here) c)
@@ -42,12 +45,23 @@
   (c-comma (logand n 255))
   (c-comma (lsh n 8)))
 
-(defmacro defword (name &rest code)
-  ;; link
-  ;; name
+(defun header (name)
+  (when (symbolp name)
+    (setq name (symbol-name name)))
+  (setf (gethash name xt-table) here))
+
+(defmacro defcode (name &rest code)
+  (header name)
+  (comma (+ here 2))
   (let ((string (byte-compile-lapcode (mapcar #'macroexpand code))))
     (dotimes (i (length string))
       (c-comma (aref string i)))))
+
+(defmacro defword (name &rest code)
+  (header name)
+  (comma docol)
+  (dolist (word code)
+    nil))
 
 (defmacro get-dictionary ()
   '(byte-constant . 0))
@@ -58,7 +72,7 @@
 (defmacro next ()
   '(byte-nop))
 
-(defword "exit"
+(defcode exit
   (byte-varref . 2)	;cons
   (byte-dup)		;cons cons
   (byte-cdr)		;cons cdr
@@ -67,105 +81,105 @@
   (byte-varset . 1)
   (next))
 
-(defword "c@"
+(defcode c@
   (get-dictionary)
   ;;(byte-swap)
   (byte-aref)
   (next))
 
-(defword "c!"
+(defcode c!
   (get-dictionary)
   ;; ...
   (byte-aset)
   (next))
 
-(defword "dup"
+(defcode dup
   (byte-dup)
   (next))
 
-(defword "2dup"
+(defcode 2dup
   (byte-stack-ref . 1)
   (byte-stack-ref . 1)
   (next))
 
-(defword "over"
+(defcode over
   (byte-stack-ref . 1)
   (next))
 
-(defword "drop"
+(defcode drop
   (byte-discard)
   (next))
 
-(defword "2drop"
+(defcode 2drop
   (byte-discardN . 2)
   (next))
 
-(defword "3drop"
+(defcode 3drop
   (byte-discardN . 3)
   (next))
 
-(defword "nip"
+(defcode nip
   (byte-discardN . #x81)
   (next))
 
-(defword "swap"
+(defcode swap
   (byte-varset . 4)
   (next))
 
-(defword "="
+(defcode =
   (byte-eq)
   (next))
 
-(defword "+"
+(defcode +
   (byte-plus)
   (next))
 
-(defword "-"
+(defcode -
   (byte-diff)
   (next))
 
-(defword "1+"
+(defcode 1+
   (byte-add1)
   (next))
 
-(defword "1-"
+(defcode 1-
   (byte-sub1)
   (next))
 
-(defword "negate"
+(defcode "negate"
   (byte-negate)
   (next))
 
-(defword "*"
+(defcode *
   (byte-mult)
   (next))
 
-(defword "/"
+(defcode /
   (byte-quo)
   (next))
 
-(defword "rem"
+(defcode rem
   (byte-rem)
   (next))
 
-(defword "max"
+(defcode max
   (byte-max)
   (next))
 
-(defword "min"
+(defcode min
   (byte-min)
   (next))
 
-;;(defword "branch"
+;;(defcode branch
 ;;  (byte-goto . 0))
 
-;;(defword "0branch"
+;;(defcode 0branch
 ;;  (byte-goto-if-nil . 0))
 
-;;(defword "(literal)"
+;;(defcode "(literal)"
 ;;  ...)
 
-(defword "bye"
+(defcode bye
   (byte-return))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -173,9 +187,16 @@
 (defun make-function (code constants)
   (make-byte-code 0 code constants 256))
 
-(defun check ()
+(defun make-forth ()
   (let ((constants (vector dictionary 'P 'R 'W 'T)))
-    (disassemble (make-function dictionary constants))))
+    (make-function dictionary constants)))
+
+(defun check ()
+  (disassemble (make-forth)))
+
+(defun forth ()
+  (interactive)
+  (funcall (make-forth)))
 
 (defun run (code &optional constants)
   (funcall (make-function (byte-compile-lapcode code) constants)))
@@ -185,8 +206,6 @@
     (setq y x))
   (byte-compile 'foo)
   (disassemble 'foo))
-
-(symbol-function 'foo)
 
 (byte-compile-lapcode
  '((byte-constant . 0)	;42 dup +
